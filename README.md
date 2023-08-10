@@ -6,8 +6,8 @@ is used for job submission.
 
 ## Requirements
 
-- Custom version of Sire available [here](https://github.com/fjclark/sire-openbiosim/tree/feature_permanent_mdr). Follow the instructions to install from source, making sure to install the BioSimSpace dependencies.
-- Custom version of BioSimSpace available [here](https://github.com/fjclark/biosimspace-openbiosim/tree/feature_mdr). Follow the instructions to install from source.
+- Custom version of Sire available [here](https://github.com/fjclark/sire-openbiosim/tree/feature_permanent_mdr). Follow the instructions to install from source, making sure to install the BioSimSpace dependencies. Make sure to check out the correct branch before installing (feature_permanent_mdr).
+- Custom version of BioSimSpace available [here](https://github.com/fjclark/biosimspace-openbiosim/tree/feature_mdr). Follow the instructions to install from source. Make sure to check out the correct branch before installing (feature_mdr).
 
 ## Customising Input/ Scripts
 
