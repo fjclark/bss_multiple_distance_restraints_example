@@ -20,6 +20,11 @@ To allow the calculation to run for your system on your cluster:
 
 ## Running the Calculation
 
+Create a calculation directory and move into it:
+```
+mkdir calculation
+cd calculation
+```
 From the `calculation` directory, run:
 ```
 python ../scripts/run_abfe_bound.py
