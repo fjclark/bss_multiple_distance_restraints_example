@@ -7,7 +7,6 @@ import argparse
 import BioSimSpace.Sandpit.Exscientia as BSS
 import logging
 import os
-
 from subprocess import Popen, PIPE, STDOUT, run
 from typing import Optional, List
 
@@ -28,6 +27,7 @@ def setup_abfe_bound_leg(
     coordinates_file: str,
     stage_options: dict,
     trajectory_file: Optional[str] = None,
+    restraint_type: str = "multiple_distance",
 ) -> None:
     """
     Set up the bound leg of the ABFE calculation with multiple distance restraints.
@@ -45,13 +45,15 @@ def setup_abfe_bound_leg(
         The path to the trajectory file to derive the restraints.
         If not supplied, the restraints will be derived from a short
         trajectory.
+    restraint_type : str, optional
+        The type of restraint to use. Must be one of "distance" or "multiple_distance".
     """
     # Load the system
     logger.info("Loading system...")
     system = BSS.IO.readMolecules([topology_file, coordinates_file])
-    # Assume that the ligand is called "MOL"
+    # Assume that the ligand is called "LIG"
     for i, mol in enumerate(system):
-        if mol._getSireObject().name().value() == "MOL":
+        if mol._getSireObject().name().value() == "LIG":
             lig = BSS.Align.decouple(mol)
             logger.info(f"Identified ligand as molecule {i}: {lig}")
             system.updateMolecule(i, lig)
@@ -73,7 +75,7 @@ def setup_abfe_bound_leg(
         )
         restraint_search.start()
         restraint = restraint_search.analyse(
-            method="BSS", block=True, restraint_type="multiple_distance"
+            method="BSS", block=True, restraint_type=restraint_type
         )
 
     else:  # We have been supplied with a trajectory file
@@ -90,7 +92,7 @@ def setup_abfe_bound_leg(
             traj,
             298 * BSS.Units.Temperature.kelvin,
             method="BSS",
-            restraint_type="multiple_distance",
+            restraint_type=restraint_type,
         )
 
     # Save the restraint correction.
@@ -125,9 +127,7 @@ def setup_abfe_bound_leg(
 
 def run_and_analyse_abfe_bound_leg(
     work_dirs: List[str],
-    slurm_run_script: str,
-    slurm_analysis_script: str,
-    collect_results_script: str,
+    scripts_dir_path: str,
 ) -> None:
     """
     Run and analyse the abfe bound leg calculations.
@@ -136,13 +136,33 @@ def run_and_analyse_abfe_bound_leg(
     ----------
     work_dirs : List[str]
         A list of the work directories for the bound leg stages.
-    slurm_run_script : str
-        The path to the slurm run script.
-    slurm_analysis_script : str
-        The path to the slurm analysis script.
-    collect_results_script : str
-        The path to the script to collect the results.
+    scripts_dir_path : str
+        The path to the directory containing the slurm scripts.
     """
+    # Make sure that all the required scripts are present.
+    required_scripts = [
+        "slurm_run.sh",
+        "slurm_analysis.sh",
+        "collect_results.sh",
+        "collect_results.py",
+    ]
+    for script in required_scripts:
+        if not os.path.exists(os.path.join(scripts_dir_path, script)):
+            raise FileNotFoundError(
+                f"Required script {script} not found in {scripts_dir_path}"
+            )
+
+    # Get the absolute paths to the scripts.
+    slurm_run_script = os.path.abspath(os.path.join(scripts_dir_path, "slurm_run.sh"))
+    slurm_analysis_script = os.path.abspath(
+        os.path.join(scripts_dir_path, "slurm_analysis.sh")
+    )
+    collect_results_script = os.path.abspath(
+        os.path.join(scripts_dir_path, "collect_results.sh")
+    )
+    collect_results_py = os.path.abspath(
+        os.path.join(scripts_dir_path, "collect_results.py")
+    )
 
     # Save the analysis job ids so that we can submit the collection script as a dependency.
     analysis_job_ids = []
@@ -150,9 +170,7 @@ def run_and_analyse_abfe_bound_leg(
     # Run the bound leg stages and submit the analysis scipts as dependencies.
     for work_dir in work_dirs:
         # Find the lambda sub-dirs
-        lambda_dirs = [
-            d for d in os.listdir(work_dir) if d in PERTURBATION_TYPES.keys()
-        ]
+        lambda_dirs = [d for d in os.listdir(work_dir)]
         job_ids = []
         for lambda_dir in lambda_dirs:
             # Run the simulation and get the slurm job ID
@@ -161,7 +179,14 @@ def run_and_analyse_abfe_bound_leg(
                 cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True
             )
             output = p.stdout.read()
-            job_ids.append(int(output.split()[-1]))
+            try:
+                job_ids.append(int(output.split()[-1]))
+            except ValueError:
+                raise ValueError(
+                    f"Could not find job ID in slurm output: {output}. Command was: {cmd}"
+                    "Check that the slurm options in the submission script are correct (e.g) "
+                    "the partition name."
+                )
 
         # Submit the analysis script as a dependency of the simulations.
         cmd = f'sbatch --dependency=afterok:{":".join([str(j) for j in job_ids])} --chdir={work_dir} {slurm_analysis_script}'
@@ -179,7 +204,7 @@ def run_and_analyse_abfe_bound_leg(
             )
 
     # Submit the result correction script as a dependency of the analysis scripts.
-    cmd = f'sbatch --dependency=afterok:{":".join([str(j) for j in analysis_job_ids])} {collect_results_script}'
+    cmd = f'sbatch --dependency=afterok:{":".join([str(j) for j in analysis_job_ids])} {collect_results_script} {collect_results_py}'
     run(cmd, shell=True)
 
 
@@ -210,25 +235,25 @@ def main() -> None:
         default="../input/traj.dcd",
     )
     parser.add_argument(
-        "-run",
-        "--slurm_run_script",
+        "-scr",
+        "--scripts_dir_path",
         type=str,
-        help="The slurm run script.",
-        default=None,
+        help="The path to the scripts directory.",
+        default="../scripts/",
     )
     parser.add_argument(
-        "-ana",
-        "--slurm_analysis_script",
+        "-rt",
+        "--restraint_type",
         type=str,
-        help="The slurm analysis script.",
-        default="../scripts/slurm_analysis.sh",
+        help="The type of restraint to use, either 'boresch' or 'multiple_distance.'",
+        default="multiple_distance",
+        # Set the choices to be the keys of the restraint dictionary
+        choices=["boresch", "multiple_distance"],
     )
     parser.add_argument(
-        "-res",
-        "--collect_results_script",
-        type=str,
-        help="The script to collect the results.",
-        default="../scripts/collect_results.py",
+        "--skip_setup",
+        type=bool,
+        help="Skip the setup stage and run the simulations.",
     )
     args = parser.parse_args()
 
@@ -236,13 +261,13 @@ def main() -> None:
     shared_extra_options = {
         # 0.1 ns per cycle, default 5 ns per simulation
         "nmoves": 25_000,
-        "timestep": "4 * femtosecond",
         "ncycles": 50,
         "buffered coordinates frequency": 500,
         "save coordinates": True,
         "cutoff distance": "12 * angstrom",
         "energy frequency": 100,
-        "center solute": True,
+        "center solute": False,
+        "minimise": True,
         "reaction field dielectric": 78.4,
         "hydrogen mass repartitioning factor": 3,
     }
@@ -250,17 +275,19 @@ def main() -> None:
     stage_specific_options = {
         "restrain": {
             # From Scott input
-            "lambda array": [0.000, 0.125, 0.250, 0.375, 0.500, 1.000],
+            "lambda array": (0.000, 0.125, 0.250, 0.375, 0.500, 1.000),
             "ncycles": 50,  # 5 ns
+            "timestep": "4 * femtosecond",
         },
         "discharge": {
             # From optimised MIF run
-            "lambda array": [0.0, 0.291, 0.54, 0.776, 1.0],
+            "lambda array": (0.0, 0.291, 0.54, 0.776, 1.0),
             "ncycles": 50,  # 5 ns
+            "timestep": "4 * femtosecond",
         },
         "vanish": {
             # From optimised MIF run
-            "lambda array": [
+            "lambda array": (
                 0.0,
                 0.026,
                 0.054,
@@ -281,13 +308,15 @@ def main() -> None:
                 0.696,
                 0.833,
                 1.0,
-            ],
+            ),
             "ncycles": 80,  # 8 ns
         },
         "release_restraint": {
             # Initial guess
-            "lambda array": [0.000, 0.125, 0.250, 0.375, 0.500, 1.000],
+            "lambda array": (0.000, 0.125, 0.250, 0.375, 0.500, 1.000),
             "ncycles": 50,  # 5 ns
+            # Shorten the timestep because HMR doesn't occur for dummy atoms
+            "timestep": "2 * femtosecond",
         },
     }
 
@@ -296,17 +325,23 @@ def main() -> None:
     for stage, options in stage_specific_options.items():
         stage_options[stage] = {**shared_extra_options, **options}
 
+    # If using Boresch restraints, remove the release_restraint stage as this is unnecessary.
+    if args.restraint_type == "boresch":
+        stage_options.pop("release_restraint")
+
     # Set up the bound leg of the ABFE calculation with multiple distance restraints.
-    setup_abfe_bound_leg(
-        args.topology, args.coordinates, stage_options, args.trajectory
-    )
+    if not args.skip_setup:
+        setup_abfe_bound_leg(
+            args.topology,
+            args.coordinates,
+            stage_options,
+            args.trajectory,
+            restraint_type=args.restraint_type,
+        )
 
     # Run and analyse the bound leg of the ABFE calculation with multiple distance restraints using SOMD.
     run_and_analyse_abfe_bound_leg(
-        work_dirs=list(stage_options.keys()),
-        slurm_run_script=args.slurm_run_script,
-        slurm_analysis_script=args.slurm_analysis_script,
-        collect_results_script=args.collect_results_script,
+        work_dirs=list(stage_options.keys()), scripts_dir_path=args.scripts_dir_path
     )
 
 

@@ -16,7 +16,7 @@ To allow the calculation to run for your system on your cluster:
 - Edit the SLURM options in the  `slurm_run.sh` and `slurm_analysis.sh` scripts to match your cluster.
 - Replace the `SYSTEM.rst7` and `SYSTEM.prm7` files in the input directory with your own equilibrated
   input files. Add a trajectory (of the fully interacting complex) file called "traj.dcd" to allow
-  the restraint to be selected.
+  the restraint to be selected. **Ensure that your ligand is named LIG**.
 
 ## Running the Calculation
 
