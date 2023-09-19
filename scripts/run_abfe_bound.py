@@ -270,6 +270,7 @@ def main() -> None:
         "minimise": True,
         "reaction field dielectric": 78.4,
         "hydrogen mass repartitioning factor": 3,
+        "constraint": "allbonds",
     }
 
     stage_specific_options = {
@@ -313,10 +314,19 @@ def main() -> None:
         },
         "release_restraint": {
             # Initial guess
-            "lambda array": (0.000, 0.125, 0.250, 0.375, 0.500, 1.000),
+            "lambda array": (
+                0.000,
+                0.125,
+                0.250,
+                0.375,
+                0.500,
+                0.625,
+                0.750,
+                0.875,
+                1.000,
+            ),
             "ncycles": 50,  # 5 ns
-            # Shorten the timestep because HMR doesn't occur for dummy atoms
-            "timestep": "2 * femtosecond",
+            "timestep": "4 * femtosecond",
         },
     }
 
