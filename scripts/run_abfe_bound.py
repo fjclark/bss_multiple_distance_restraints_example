@@ -100,6 +100,11 @@ def setup_abfe_bound_leg(
         f.write("Restraint correction in kcal/mol:\n")
         f.write(str(restraint.getCorrection(method="numerical")))
 
+    # Save the restraint selected
+    with open("restraint.txt", "w") as f:
+        f.write(restraint.toString("Somd"))
+        f.write("\n")
+
     # Set up the stages of the bound leg.
     for stage_name, stage_options in stage_options.items():
         if stage_name not in PERTURBATION_TYPES:
