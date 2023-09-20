@@ -4,4 +4,4 @@
 #SBATCH -n 1
 
 # The first argument is the path to the collect_results.py script
-srun python $1/collect_results.py
+srun python $1
