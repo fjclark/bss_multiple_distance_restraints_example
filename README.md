@@ -29,6 +29,10 @@ From the `calculation` directory, run:
 ```
 python ../scripts/run_abfe_bound.py
 ```
+To use Boresch restraints instead, run:
+```
+python ../scripts/run_abfe_bound.py -rt boresch
+```
 If you are running from a different relative path, or have renamed/ moved some of the scripts
 or inputs, you will have to specify this. Run `python ../scripts/run_abfe_bound.py --help`
 for details.
