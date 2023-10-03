@@ -331,7 +331,7 @@ def main() -> None:
                 1.000,
             ),
             "ncycles": 50,  # 5 ns
-            "timestep": "4 * femtosecond",
+            "timestep": "2 * femtosecond",
         },
     }
 
